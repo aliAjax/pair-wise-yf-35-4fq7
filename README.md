@@ -26,6 +26,17 @@ python3 app.py --db ./data.db --port 8301
 
 - `athlete`：运动员；`sample`：检测样本；`case`：结果管理案件。
 
+## B样复核流程
+
+初检阳性（adverse）立案后，案件进入临时禁赛，复核回路如下：
+
+- 立案时把初检结论快照到`initial_result`，并写入复核保留期`review_deadline`（默认立案后30天，创建时可用ISO日期覆盖）。
+- `request_review`（`open`/`suspended` → `review_pending`）：运动员方（`athlete`/`admin`/`panel`角色）在保留期内提出复核；保留期已过或已有复核结论会被拒绝。
+- `report_review`（`review_pending` → `suspended`/`review_disputed`）：实验室回传`review_result`。`confirmed`表示仍为阳性，回到`suspended`继续临时禁赛；`negative`表示未检出，与初检不一致，转入`review_disputed`。
+- `resolve_review`（`review_disputed` → `closed`）：案件负责人处置不一致结论，只允许`no_sanction`，按无处罚结束。
+- `expire_review`（`open`/`suspended`/`review_pending` → `closed`）：保留期已过且复核未确认阳性时，按无处罚结束（`decision=no_sanction`，`closure=retention_expired`）。
+- 样本的`result`、案件的`initial_result`和`review_result`是受保护结论：一旦记录，后到的普通更新携带不同值会被拒绝（409），初检与复检两份结论始终同时留在案件里。
+
 ## 主要接口
 
 - `GET /health`：健康检查。
