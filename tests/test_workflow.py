@@ -32,7 +32,24 @@ class WorkflowTest(unittest.TestCase):
 
     def test_full_workflow(self):
         created = {}
-        steps = [{'op': 'create', 'as': 'athlete', 'kind': 'athlete', 'data': {'name': 'A. Rider', 'discipline': 'cycling'}}, {'op': 'create', 'as': 'sample', 'kind': 'sample', 'data': {'athlete_id': '{athlete}', 'sample_code': 'S-001', 'event': 'national-final'}}, {'op': 'transition', 'target': 'sample', 'action': 'collect', 'data': {'collected_at': '2026-01-01T08:00:00Z'}, 'expect': 'collected'}, {'op': 'transition', 'target': 'sample', 'action': 'seal', 'data': {'seal_id': 'SEAL-1'}, 'expect': 'sealed'}, {'op': 'transition', 'target': 'sample', 'action': 'ship', 'data': {'carrier': 'Courier-A'}, 'expect': 'in_transit'}, {'op': 'transition', 'target': 'sample', 'action': 'receive', 'data': {'lab_id': 'LAB-1'}, 'expect': 'received'}, {'op': 'transition', 'target': 'sample', 'action': 'analyze', 'data': {'result': 'adverse'}, 'expect': 'analyzed'}, {'op': 'transition', 'target': 'sample', 'action': 'report_adverse', 'data': {}, 'expect': 'adverse'}, {'op': 'create', 'as': 'case', 'kind': 'case', 'data': {'athlete_id': '{athlete}', 'sample_id': '{sample}', 'alleged_rule': 'substance-1'}}, {'op': 'transition', 'target': 'case', 'action': 'provisional_suspend', 'data': {'reason': 'adverse A sample'}, 'expect': 'suspended'}, {'op': 'transition', 'target': 'case', 'action': 'schedule_hearing', 'data': {'hearing_at': '2026-02-01'}, 'expect': 'hearing'}, {'op': 'transition', 'target': 'case', 'action': 'decide', 'data': {'decision': 'sanction'}, 'expect': 'closed'}]
+        steps = [
+            {'op': 'create', 'as': 'athlete', 'kind': 'athlete', 'data': {'name': 'A. Rider', 'discipline': 'cycling'}},
+            {'op': 'create', 'as': 'sample', 'kind': 'sample', 'data': {'athlete_id': '{athlete}', 'sample_code': 'S-001', 'event': 'national-final'}},
+            {'op': 'transition', 'target': 'sample', 'action': 'collect', 'data': {'collected_at': '2026-01-01T08:00:00Z'}, 'expect': 'collected'},
+            {'op': 'transition', 'target': 'sample', 'action': 'seal', 'data': {'seal_id': 'SEAL-1'}, 'expect': 'sealed'},
+            {'op': 'transition', 'target': 'sample', 'action': 'ship', 'data': {'carrier': 'Courier-A'}, 'expect': 'in_transit'},
+            {'op': 'transition', 'target': 'sample', 'action': 'receive', 'data': {'lab_id': 'LAB-1'}, 'expect': 'received'},
+            {'op': 'transition', 'target': 'sample', 'action': 'analyze', 'data': {'result': 'adverse'}, 'expect': 'analyzed'},
+            {'op': 'transition', 'target': 'sample', 'action': 'report_adverse', 'data': {}, 'expect': 'adverse'},
+            {'op': 'create', 'as': 'case', 'kind': 'case', 'data': {'athlete_id': '{athlete}', 'sample_id': '{sample}', 'alleged_rule': 'substance-1', 'filed_at': '2026-01-10'}},
+            {'op': 'transition', 'target': 'case', 'action': 'provisional_suspend', 'data': {'reason': 'adverse A sample'}, 'expect': 'suspended'},
+            # 运动员方在保留期内申请B样复核。
+            {'op': 'transition', 'target': 'case', 'action': 'request_review', 'data': {'requested_at': '2026-01-15'}, 'expect': 'review_pending'},
+            # 复核仍为阳性，继续临时禁赛。
+            {'op': 'transition', 'target': 'case', 'action': 'record_review', 'data': {'review_result': 'positive', 'lab_report_id': 'B-REPORT-1'}, 'expect': 'suspended'},
+            {'op': 'transition', 'target': 'case', 'action': 'schedule_hearing', 'data': {'hearing_at': '2026-02-01'}, 'expect': 'hearing'},
+            {'op': 'transition', 'target': 'case', 'action': 'decide', 'data': {'decision': 'sanction'}, 'expect': 'closed'},
+        ]
         for step in steps:
             if step["op"] == "create":
                 entity = self.service.create(
@@ -52,6 +69,10 @@ class WorkflowTest(unittest.TestCase):
                 )
             if "expect" in step:
                 self.assertEqual(entity["status"], step["expect"])
+        case = self.service.get(created["case"])
+        self.assertEqual(case["data"]["initial_result"], "positive")
+        self.assertEqual(case["data"]["review_result"], "positive")
+        self.assertEqual(case["data"]["retention_until"], "2026-01-24")
 
 
 if __name__ == "__main__":
